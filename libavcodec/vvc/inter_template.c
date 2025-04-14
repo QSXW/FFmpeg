@@ -339,28 +339,28 @@ static void FUNC(apply_prof)(int16_t *_dst, const int16_t *_src, const int16_t *
             const int di = gradient_h[o] * diff_mv_x[o] + gradient_v[o] * diff_mv_y[o];
             const int val = src[x] + av_clip(di, -limit, limit - 1);
             dst[x] = val;
-
         }
         src += MAX_PB_SIZE;
         dst += MAX_PB_SIZE;
     }
 }
 
-static void FUNC(apply_prof_uni)(uint8_t *_dst, const ptrdiff_t _dst_stride, const int16_t *src, const int16_t *diff_mv_x, const int16_t *diff_mv_y)
+static void FUNC(apply_prof_uni)(uint8_t *_dst, const ptrdiff_t _dst_stride, const int16_t *_src, const int16_t *diff_mv_x, const int16_t *diff_mv_y)
 {
     const int limit             = (1 << FFMAX(13, BIT_DEPTH + 1));          ///< dILimit
+    const tpixel *src           = (const tpixel *)_src;
     pixel *dst                  = (pixel*)_dst;
     const ptrdiff_t dst_stride  = _dst_stride / sizeof(pixel);
-    const int shift             = 14 - BIT_DEPTH;
-#if BIT_DEPTH < 14
+    const int shift             = FFMAX(2, 14 - BIT_DEPTH);
     const int offset            = 1 << (shift - 1);
-#else
-    const int offset            = 0;
-#endif
-    int16_t gradient_h[AFFINE_MIN_BLOCK_SIZE * AFFINE_MIN_BLOCK_SIZE];
-    int16_t gradient_v[AFFINE_MIN_BLOCK_SIZE * AFFINE_MIN_BLOCK_SIZE];
 
-    FUNC(prof_grad_filter)(gradient_h, gradient_v, AFFINE_MIN_BLOCK_SIZE, src, MAX_PB_SIZE, AFFINE_MIN_BLOCK_SIZE, AFFINE_MIN_BLOCK_SIZE);
+    tpixel gradient_h[AFFINE_MIN_BLOCK_SIZE * AFFINE_MIN_BLOCK_SIZE];
+    tpixel gradient_v[AFFINE_MIN_BLOCK_SIZE * AFFINE_MIN_BLOCK_SIZE];
+
+    int16_t *gh = (int16_t *)gradient_h;
+    int16_t *gv = (int16_t *)gradient_v;
+
+    FUNC(prof_grad_filter)(gh, gv, AFFINE_MIN_BLOCK_SIZE, _src, MAX_PB_SIZE, AFFINE_MIN_BLOCK_SIZE, AFFINE_MIN_BLOCK_SIZE);
 
     for (int y = 0; y < AFFINE_MIN_BLOCK_SIZE; y++) {
         for (int x = 0; x < AFFINE_MIN_BLOCK_SIZE; x++) {
@@ -368,7 +368,6 @@ static void FUNC(apply_prof_uni)(uint8_t *_dst, const ptrdiff_t _dst_stride, con
             const int di = gradient_h[o] * diff_mv_x[o] + gradient_v[o] * diff_mv_y[o];
             const int val = src[x] + av_clip(di, -limit, limit - 1);
             dst[x] = av_clip_pixel((val + offset) >> shift);
-
         }
         src += MAX_PB_SIZE;
         dst += dst_stride;
